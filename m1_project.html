@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Student Score Predictor</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.12.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  background-color: #222;
+  color: white;
+  margin: 0;
+  padding: 0;
+}
+h1 {
+  margin-top: 30px;
+}
+input, button {
+  padding: 10px;
+  font-size: 16px;
+  margin: 10px;
+}
+canvas {
+  margin-top: 20px;
+  background-color: white;
+}
+</style>
+</head>
+<body>
+
+<h1>Student Exam Score Predictor</h1>
+<p>Train a model to predict exam scores based on study hours</p>
+
+<input type="number" id="studyHours" placeholder="Enter study hours" min="0">
+<button onclick="predictScore()">Predict Score</button>
+<h2 id="prediction">Prediction: --</h2>
+<h3 id="accuracy">Model Accuracy: --</h3>
+
+<canvas id="chart" width="400" height="300"></canvas>
+
+<script>
+let xs, ys, model, chart;
+
+function generateData() {
+  // Generate random student dataset
+  xs = [];
+  ys = [];
+  for (let i = 0; i < 50; i++) {
+    let hours = Math.random() * 10; // 0-10 hours
+    let score = hours * 10 + (Math.random() * 10); // simple linear relationship
+    xs.push(hours);
+    ys.push(score);
+  }
+}
+
+async function trainModel() {
+  // Convert to tensors
+  const inputTensor = tf.tensor2d(xs, [xs.length, 1]);
+  const outputTensor = tf.tensor2d(ys, [ys.length, 1]);
+
+  // Define model
+  model = tf.sequential();
+  model.add(tf.layers.dense({units: 1, inputShape: [1]}));
+  model.compile({optimizer: 'sgd', loss: 'meanSquaredError'});
+
+  // Train model
+  await model.fit(inputTensor, outputTensor, {
+    epochs: 200,
+    shuffle: true
+  });
+
+  // Evaluate accuracy (R^2 approximation)
+  const preds = model.predict(inputTensor).dataSync();
+  let ssRes = 0, ssTot = 0;
+  const meanY = ys.reduce((a,b)=>a+b)/ys.length;
+  for (let i=0;i<ys.length;i++){
+    ssRes += Math.pow(ys[i]-preds[i],2);
+    ssTot += Math.pow(ys[i]-meanY,2);
+  }
+  const r2 = (1 - ssRes/ssTot)*100;
+  document.getElementById("accuracy").innerText = "Model Accuracy: " + r2.toFixed(2) + "%";
+
+  drawChart(preds);
+}
+
+function drawChart(preds){
+  const ctx = document.getElementById('chart').getContext('2d');
+  if(chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: 'Real Scores',
+          data: xs.map((x,i)=>({x:x, y:ys[i]})),
+          backgroundColor: 'red'
+        },
+        {
+          label: 'Predicted Scores',
+          data: xs.map((x,i)=>({x:x, y:preds[i]})),
+          backgroundColor: 'blue'
+        }
+      ]
+    },
+    options: {
+      scales: {
+        x: {title: {display: true, text: 'Study Hours'}},
+        y: {title: {display: true, text: 'Exam Score'}}
+      }
+    }
+  });
+}
+
+async function predictScore(){
+  const hours = parseFloat(document.getElementById("studyHours").value);
+  if(!model || isNaN(hours)) return alert("Enter valid hours and wait for training.");
+  const pred = model.predict(tf.tensor2d([hours],[1,1])).dataSync()[0];
+  document.getElementById("prediction").innerText = "Prediction: " + pred.toFixed(2);
+}
+
+// Run on load
+generateData();
+trainModel();
+</script>
+
+</body>
+</html>
